@@ -1,0 +1,181 @@
+/* This file is a small collection of different queries used during my training in sql */
+
+-- Basic querying using FROM, CASE WHEN, ALIAS, WHERE, JOINS and ORDER BY:
+
+SELECT country_code, size,
+  CASE WHEN size > 50000000
+            THEN 'large'
+       WHEN size > 1000000
+            THEN 'medium'
+       ELSE 'small' END
+       AS popsize_group
+INTO pop_plus       
+FROM populations
+WHERE year = 2015;
+
+SELECT c.name, c.continent, c.geosize_group, popsize_group
+FROM countries_plus AS c
+  INNER JOIN pop_plus AS p
+    ON c.code = p.country_code    
+ORDER BY geosize_group;
+
+-- UNION and EXCEPT
+
+SELECT name
+  FROM cities AS c1
+  WHERE country_code IN
+(
+    SELECT e.code
+    FROM economies AS e
+    UNION
+    SELECT c2.code
+    FROM currencies AS c2
+    EXCEPT
+    SELECT p.country_code
+    FROM populations AS p
+);
+
+-- Subqueries and aggregations:
+
+SELECT name, continent, inflation_rate
+  FROM countries
+	INNER JOIN economies
+	ON countries.code = economies.code
+  WHERE year = 2015
+    AND inflation_rate IN (
+        SELECT MAX(inflation_rate) AS max_inf
+        FROM (
+             SELECT name, continent, inflation_rate
+             FROM countries
+             INNER JOIN economies
+             ON countries.code = economies.code
+             WHERE year = 2015) AS subquery
+        GROUP BY continent);
+        
+-- Window functions:
+
+SELECT
+  Year,
+  ROW_NUMBER() OVER () AS Row_N
+FROM (
+  SELECT DISTINCT Year
+  FROM Summer_Medals
+  ORDER BY Year ASC
+) AS Years
+ORDER BY Year ASC;
+
+-- CTE, window functions:
+
+WITH Athletics_Gold AS (
+  SELECT 
+    DISTINCT Gender, 
+    Year, 
+    Event, 
+    Country 
+  FROM 
+    Summer_Medals 
+  WHERE 
+    Year >= 2000 
+    AND Discipline = 'Athletics' 
+    AND Event IN ('100M', '10000M') 
+    AND Medal = 'Gold'
+) 
+SELECT 
+  Gender, 
+  Year, 
+  Event, 
+  Country AS Champion, 
+  LAG(Country) OVER (
+    PARTITION BY Gender, 
+    Event 
+    ORDER BY 
+      Year ASC
+  ) AS Last_Champion 
+FROM 
+  Athletics_Gold 
+ORDER BY 
+  Event ASC, 
+  Gender ASC, 
+  Year ASC;
+  
+  -- Fetching:
+  
+WITH Hosts AS (
+  SELECT 
+    DISTINCT Year, 
+    City 
+  FROM 
+    Summer_Medals
+) 
+SELECT 
+  Year, 
+  City, 
+  LAST_VALUE(city) OVER (
+    ORDER BY 
+      year ASC RANGE BETWEEN UNBOUNDED PRECEDING 
+      AND UNBOUNDED FOLLOWING
+  ) AS Last_City 
+FROM 
+  Hosts 
+ORDER BY 
+  Year ASC;
+  
+-- Ranking:
+
+WITH Athlete_Medals AS (
+  SELECT 
+    Country, 
+    Athlete, 
+    COUNT(*) AS Medals 
+  FROM 
+    Summer_Medals 
+  WHERE 
+    Country IN ('JPN', 'KOR') 
+    AND Year >= 2000 
+  GROUP BY 
+    Country, 
+    Athlete 
+  HAVING 
+    COUNT(*) > 1
+) 
+SELECT 
+  Country, 
+  athlete, 
+  DENSE_RANK() OVER (
+    PARTITION BY country 
+    ORDER BY 
+      Medals DESC
+  ) AS Rank_N 
+FROM 
+  Athlete_Medals 
+ORDER BY 
+  Country ASC, 
+  RANK_N ASC;
+
+-- Paging:
+
+WITH Athlete_Medals AS (
+  SELECT 
+    Athlete, 
+    COUNT(*) AS Medals 
+  FROM 
+    Summer_Medals 
+  GROUP BY 
+    Athlete 
+  HAVING 
+    COUNT(*) > 1
+) 
+SELECT 
+  Athlete, 
+  Medals, 
+  NTILE(3) OVER (
+    ORDER BY 
+      Medals DESC
+  ) AS Third 
+FROM 
+  Athlete_Medals 
+ORDER BY 
+  Medals DESC, 
+  Athlete ASC;
+
+/* File will be updated with more */
