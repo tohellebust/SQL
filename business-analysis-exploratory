@@ -1,0 +1,138 @@
+-- This file will showcase some of the queries used in the SQL for Business Analysis training I attended
+
+/*
+Exploring the database and get a clear understanding of the data is important before use.
+The entity relationship diagram is a good way to explore the relationship between tables if available.
+By using different syntaxes (like counting, joining, aggregations and more) we can also find out if there 
+is anything that is missing or otherwise needs to be looked closer at to get a clear understanding of the data
+and also assess the quality of the data.
+*/
+
+-- Compute standard deviation of maximum values:
+
+SELECT min(maxval),
+       max(maxval),
+       avg(maxval),
+       stddev(maxval)
+  FROM (SELECT max(question_count) AS maxval
+          FROM stackoverflow
+         GROUP BY tag) AS max_results;
+         
+-- Truncate employees:
+
+SELECT trunc(employees, -5) AS employee_bin,
+       COUNT(*)
+  FROM fortune500
+ GROUP BY employee_bin
+ ORDER BY employee_bin;
+ 
+ 
+ WITH bins AS (
+      SELECT generate_series(2200, 3050, 50) AS lower,
+             generate_series(2250, 3100, 50) AS upper),
+     dropbox AS (
+      SELECT question_count 
+        FROM stackoverflow
+       WHERE tag='dropbox') 
+SELECT lower, upper, count(question_count) 
+  FROM bins
+       LEFT JOIN dropbox
+         ON question_count >= lower 
+        AND question_count < upper
+ GROUP BY lower, upper
+ ORDER BY lower;
+ 
+ -- Correlation between revenues and profit:
+ 
+SELECT corr(revenues, profits) AS rev_profits,
+       corr(revenues, assets) AS rev_assets,
+       corr(revenues, equity) AS rev_equity 
+  FROM fortune500;
+  
+-- Computing mean and median of assets:
+
+SELECT sector, 
+       avg(assets) AS mean,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY assets) AS median
+  FROM fortune500
+ GROUP BY sector
+ ORDER BY mean;
+ 
+-- Creating a temp table to simplify a query:
+
+DROP TABLE IF EXISTS startdates;
+
+CREATE TEMP TABLE startdates AS
+SELECT tag,
+       min(date) AS mindate
+  FROM stackoverflow
+ GROUP BY tag;
+ 
+ SELECT * 
+   FROM startdates;
+   
+ -- Insert into temp table:
+ 
+ DROP TABLE IF EXISTS correlations;
+
+CREATE TEMP TABLE correlations AS
+SELECT 'profits'::varchar AS measure,
+       corr(profits, profits) AS profits,
+       corr(profits, profits_change) AS profits_change,
+       corr(profits, revenues_change) AS revenues_change
+  FROM fortune500;
+
+INSERT INTO correlations
+SELECT 'profits_change'::varchar AS measure,
+       corr(profits_change, profits) AS profits,
+       corr(profits_change, profits_change) AS profits_change,
+       corr(profits_change, revenues_change) AS revenues_change
+  FROM fortune500;
+
+INSERT INTO correlations
+SELECT 'revenues_change'::varchar AS measure,
+       corr(revenues_change, profits) AS profits,
+       corr(revenues_change, profits_change) AS profits_change,
+       corr(revenues_change, revenues_change) AS revenues_change
+  FROM fortune500;
+  
+-- Creating an indicator table:
+DROP TABLE IF EXISTS indicators;
+
+CREATE TEMP TABLE indicators AS
+  SELECT id, 
+         CAST (description LIKE '%@%' AS integer) AS email,
+         CAST (description LIKE '%___-___-____%' AS integer) AS phone 
+    FROM evanston311;
+  
+SELECT priority,
+       sum(email)/count(*)::numeric AS email_prop, 
+       sum(phone)/count(*)::numeric AS phone_prop
+  FROM evanston311
+       LEFT JOIN indicators
+       ON evanston311.id=indicators.id
+ GROUP BY priority;
+  
+-- Grouping and recoding values:
+
+DROP TABLE IF EXISTS recode;
+CREATE TEMP TABLE recode AS
+  SELECT DISTINCT category, 
+         rtrim(split_part(category, '-', 1)) AS standardized
+  FROM evanston311;
+UPDATE recode SET standardized='Trash Cart' 
+ WHERE standardized LIKE 'Trash%Cart';
+UPDATE recode SET standardized='Snow Removal' 
+ WHERE standardized LIKE 'Snow%Removal%';
+UPDATE recode SET standardized='UNUSED' 
+ WHERE standardized IN ('THIS REQUEST IS INACTIVE...Trash Cart', 
+               '(DO NOT USE) Water Bill',
+               'DO NOT USE Trash', 'NO LONGER IN USE');
+
+SELECT standardized, count(*)
+  FROM evanston311 
+       INNER JOIN recode 
+       ON evanston311.category = recode.category 
+ GROUP BY standardized
+ ORDER BY count(*) DESC;
+ 
