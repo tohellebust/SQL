@@ -1,0 +1,77 @@
+/* This file shows some of the queries in data manipulation in sql that I have usedin training */
+
+-- Getting information about the data
+
+ SELECT * 
+ FROM INFORMATION_SCHEMA.COLUMNS 
+ WHERE table_name = 'actor';
+ 
+ -- Manipulating date/time:
+ 
+SELECT 
+  EXTRACT(dow FROM rental_date) AS dayofweek, 
+  AGE(return_date, rental_date) AS rental_days 
+FROM 
+  rental AS r 
+WHERE 
+  rental_date BETWEEN CAST('2005-05-01' AS DATE) 
+  AND CAST('2005-05-01' AS DATE) + INTERVAL '90 day';
+  
+-- Concatenating, TRIM and manipulating case and length of data strings:
+
+SELECT first_name || ' ' || last_name  || ' <' || email || '>' AS full_email 
+FROM customer;
+
+SELECT CONCAT(first_name, ' ', last_name, ' <', email, '>') AS full_email 
+FROM customer;
+
+SELECT 
+  UPPER(c.name)  || ': ' || INITCAP(f.title) AS film_category, 
+  LOWER(f.description) AS description
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc 
+  	ON f.film_id = fc.film_id 
+  INNER JOIN category AS c 
+  	ON fc.category_id = c.category_id;
+     
+SELECT 
+  UPPER(c.name) || ': ' || f.title AS film_category, 
+  LEFT(
+    description, 
+    50 - POSITION(
+      ' ' IN REVERSE(
+        LEFT(description, 50)
+      )
+    )
+  ) 
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc ON f.film_id = fc.film_id 
+  INNER JOIN category AS c ON fc.category_id = c.category_id;
+  
+SELECT 
+  CONCAT(UPPER(c.name), ': ', f.title) AS film_category, 
+  TRIM(LEFT(description, 50)) AS film_desc
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc 
+  	ON f.film_id = fc.film_id 
+  INNER JOIN category AS c 
+  	ON fc.category_id = c.category_id;
+    
+-- finding similarity in text:
+
+SELECT 
+  title, 
+  description, 
+  similarity(description, 'Astounding Drama') 
+FROM 
+  film 
+WHERE 
+  to_tsvector(description) @@ 
+  to_tsquery('Astounding & Drama') 
+ORDER BY 
+	similarity(description, 'Astounding Drama') DESC;
+  
+
